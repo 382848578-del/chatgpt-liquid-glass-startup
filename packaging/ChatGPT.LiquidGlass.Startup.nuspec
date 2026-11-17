@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>ChatGPT.LiquidGlass.Startup</id>
+    <version>1.0.0</version>
+    <authors>382848578-del</authors>
+    <description>Windows x64 ChatGPT startup animation with continuous welcome liu handwriting, Liquid Glass and aperture reveal. Extract tools and run Install.cmd. The simpler standalone ZIP installer is available in GitHub Releases.</description>
+    <projectUrl>https://github.com/382848578-del/chatgpt-liquid-glass-startup</projectUrl>
+    <repository type="git" url="https://github.com/382848578-del/chatgpt-liquid-glass-startup" branch="main" />
+    <readme>README.md</readme>
+    <tags>chatgpt windows startup animation liquid-glass</tags>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+  </metadata>
+  <files>
+    <file src="bin\ChatGPT-Startup.exe" target="tools\bin" />
+    <file src="startup-paths.json" target="tools" />
+    <file src="Install.cmd" target="tools" />
+    <file src="Install.ps1" target="tools" />
+    <file src="Uninstall.cmd" target="tools" />
+    <file src="Uninstall.ps1" target="tools" />
+    <file src="README.md" target="" />
+    <file src="README.md" target="tools" />
+  </files>
+</package>
