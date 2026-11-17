@@ -1,0 +1,10 @@
+*.lnk
+app-config.json
+install-state.json
+last-run.json
+launcher-self-test.json
+launcher-error.log
+window-placement.json
+__pycache__/
+media/
+.DS_Store
