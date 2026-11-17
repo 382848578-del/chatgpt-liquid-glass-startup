@@ -1,0 +1,49 @@
+name: Publish GitHub Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - packaging/**
+      - .github/workflows/publish-package.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-nuget
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Windows executable
+        shell: powershell
+        run: ./Build.ps1
+      - name: Build and publish the NuGet distribution
+        shell: powershell
+        env:
+          GH_PACKAGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $nuget = Join-Path $env:RUNNER_TEMP 'nuget.exe'
+          Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $nuget -UseBasicParsing
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          & $nuget pack packaging/ChatGPT.LiquidGlass.Startup.nuspec -BasePath $env:GITHUB_WORKSPACE -OutputDirectory artifacts -NoPackageAnalysis -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet packaging failed.' }
+          $config = Join-Path $env:RUNNER_TEMP 'nuget-publish.config'
+          '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear /></packageSources></configuration>' | Set-Content -LiteralPath $config -Encoding UTF8
+          $source = 'https://nuget.pkg.github.com/' + $env:GITHUB_REPOSITORY_OWNER + '/index.json'
+          & $nuget sources Add -Name github -Source $source -UserName $env:GITHUB_ACTOR -Password $env:GH_PACKAGE_TOKEN -StorePasswordInClearText -ConfigFile $config -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'Registry authentication failed.' }
+          $package = Get-ChildItem artifacts -Filter '*.nupkg' | Select-Object -First 1
+          & $nuget push $package.FullName -Source github -ApiKey $env:GH_PACKAGE_TOKEN -ConfigFile $config -SkipDuplicate -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Packages publishing failed.' }
+          Remove-Item -LiteralPath $config -Force
+          'Published ChatGPT.LiquidGlass.Startup 1.0.0. The direct Windows ZIP remains available under Releases.' >> $env:GITHUB_STEP_SUMMARY
