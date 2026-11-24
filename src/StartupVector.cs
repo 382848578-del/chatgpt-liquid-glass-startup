@@ -16,6 +16,23 @@ public sealed class StartupVector : FrameworkElement {
     readonly Color[] colors = { C("#90bdff"),C("#d2eaff"),C("#f2f7ff"),C("#a8d5f5"),C("#b9bcf9"),C("#ebd6ef"),C("#f6d7ae"),C("#d6ebff"),C("#96c4ff") };
     public ImageSource Backdrop {get;set;}
     readonly Brush background = new SolidColorBrush(C("#08070e"));
+    FormattedText skipHint;
+    FormattedText escapeKey;
+    double skipHintDpi;
+    void DrawSkipHint(DrawingContext dc) {
+        double opacity=Ease((Time-.35)/.18)*(1-Ease((Time-7.25)/.22));
+        if(opacity<=0)return;
+        double dpi=VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        if(skipHint==null||skipHintDpi!=dpi) {
+            skipHintDpi=dpi;
+            skipHint=new FormattedText("\u8df3\u8fc7",System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),FlowDirection.LeftToRight,new Typeface("Microsoft YaHei UI"),12,new SolidColorBrush(C("#aeb8c8")),dpi);
+            escapeKey=new FormattedText("esc",System.Globalization.CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI Variable Text"),11.5,new SolidColorBrush(C("#c9d1de")),dpi);
+        }
+        dc.PushOpacity(opacity);
+        dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(14,225,236,255)),new Pen(new SolidColorBrush(Color.FromArgb(36,214,230,255)),.75),new Rect(22,20,33,23),6,6);
+        dc.DrawText(escapeKey,new Point(38.5-escapeKey.Width/2,31.5-escapeKey.Height/2));
+        dc.DrawText(skipHint,new Point(64,31.5-skipHint.Height/2));dc.Pop();
+    }
     static Color C(string s) { return (Color)ColorConverter.ConvertFromString(s); }
     public StartupVector() {
         foreach(string data in Paths) {
@@ -149,6 +166,7 @@ public sealed class StartupVector : FrameworkElement {
     protected override void OnRender(DrawingContext dc) {
         base.OnRender(dc);double w=ActualWidth,h=ActualHeight;if(w<=0||h<=0)return;
         dc.DrawRectangle(background,null,new Rect(0,0,w,h));
+        DrawSkipHint(dc);
         double scale=Math.Min(w/720,h/400)*1.16;
         dc.PushTransform(new TranslateTransform(w/2-229*scale,h/2-77*scale));dc.PushTransform(new ScaleTransform(scale,scale));
         double t=Time;
@@ -206,6 +224,9 @@ public static class StartupWindows {
     [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h,ref POINT p);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint id);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h,uint command);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    public static bool IsAbove(IntPtr a,IntPtr b) {IntPtr h=GetWindow(b,3);for(int i=0;i<1000&&h!=IntPtr.Zero;i++,h=GetWindow(h,3))if(h==a)return true;return false;}
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int w,int ht,uint flags);

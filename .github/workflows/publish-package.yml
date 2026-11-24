@@ -46,4 +46,4 @@ jobs:
           & $nuget push $package.FullName -Source github -ApiKey $env:GH_PACKAGE_TOKEN -ConfigFile $config -SkipDuplicate -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Packages publishing failed.' }
           Remove-Item -LiteralPath $config -Force
-          'Published ChatGPT.LiquidGlass.Startup 1.0.0. The direct Windows ZIP remains available under Releases.' >> $env:GITHUB_STEP_SUMMARY
+          'Published the version declared in packaging/ChatGPT.LiquidGlass.Startup.nuspec. The direct Windows ZIP remains available under Releases.' >> $env:GITHUB_STEP_SUMMARY

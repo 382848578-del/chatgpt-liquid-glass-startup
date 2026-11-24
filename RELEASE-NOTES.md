@@ -1,13 +1,15 @@
-# v1.0.0
+# v1.0.1 · 2026-11-24
 
 下载 `ChatGPT-Glass-Startup-Windows-x64.zip`，完整解压后双击 `Install.cmd`。
 
-- Windows 10/11 64 位，无需管理员权限、Python 或 Node.js。
-- 自动识别本机桌面、开始菜单或 Microsoft Store 中的 ChatGPT，也可手动选择原快捷方式。
-- 纯黑首帧，连续手写 welcome liu，液态玻璃轮廓与真实镂空展开。
-- 矢量实时渲染、随软件窗口移动缩放，覆盖顶部菜单栏。
-- 修复启动白屏与窗口替换造成动画提前中断的问题。
-- 安装前自动备份原桌面入口，支持卸载恢复。
+- 新增左上角 Apple 风格 `esc` 键帽 + “跳过”提示，按 Esc 可立即跳过。
+- 修复动画全局强制置顶的问题：其他前台软件可以正常盖住动画，切回 ChatGPT 后正常显示。
+- 保留纯黑首帧、现有手写速度、液态玻璃效果和镂空展开节奏。
+- 已验证其他窗口覆盖、窗口更换、尺寸跟随和完整播放。
+
+已有安装：重新运行新版 `Install.cmd` 即可覆盖更新，无需先卸载，原快捷方式备份会保留。
+
+完整记录：[CHANGELOG.md](https://github.com/382848578-del/chatgpt-liquid-glass-startup/blob/main/CHANGELOG.md)。
 
 该过场通过新建的桌面入口生效。当前发行包不适用于 macOS。
 

@@ -15,15 +15,15 @@ public sealed class StartupLauncher {
     readonly string root=AppDomain.CurrentDomain.BaseDirectory;
     readonly Stopwatch clock=Stopwatch.StartNew();
     readonly JavaScriptSerializer json=new JavaScriptSerializer();
-    Window window,stub;
+    Window window,stub,covering;
     StartupVector vector;
     IntPtr overlay,target;
     DispatcherTimer scan,animation;
     StartupWindows.WinEventProc windowEvents;
     IntPtr eventHook;
-    bool started,closed,test,replaced,resized,captureStarted,blackFirstFrame;
+    bool started,closed,test,replaced,resized,captureStarted,blackFirstFrame,testedCover;
     double firstFrame=-1,launchTime=-1,targetSince,lastFrameTime=-1,revealStart=-1;
-    int frames,rebinds,boundsMismatches;
+    int frames,rebinds,boundsMismatches,layeringFailures,coveringSamples;
     string reason="unknown";
     StartupWindows.RECT lastBounds;
     static StartupWindows.RECT Rect(int x,int y,int w,int h) {return new StartupWindows.RECT{Left=x,Top=y,Right=x+w,Bottom=y+h};}
@@ -57,10 +57,11 @@ public sealed class StartupLauncher {
             if(lastBounds.Right-lastBounds.Left<200||lastBounds.Bottom-lastBounds.Top<150)lastBounds=Rect((int)(work.Left+work.Width*.12),(int)(work.Top+work.Height*.1),(int)(work.Width*.76),(int)(work.Height*.8));
         }
         if(test)lastBounds=Rect(80,80,900,620);
-        window=new Window{Title="ChatGPT Startup Animation",WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,WindowState=WindowState.Normal,ShowInTaskbar=false,ShowActivated=true,Topmost=true,Background=new SolidColorBrush(Color.FromRgb(8,7,14)),Content=vector};
+        window=new Window{Title="ChatGPT Startup Animation",WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,WindowState=WindowState.Normal,ShowInTaskbar=false,ShowActivated=true,Topmost=false,Background=new SolidColorBrush(Color.FromRgb(8,7,14)),Content=vector};
         window.Left=lastBounds.Left;window.Top=lastBounds.Top;window.Width=lastBounds.Right-lastBounds.Left;window.Height=lastBounds.Bottom-lastBounds.Top;
         window.SourceInitialized+=delegate{overlay=new WindowInteropHelper(window).Handle;Position(lastBounds);};
         window.ContentRendered+=FirstPaint;
+        window.Activated+=delegate{if(started&&target!=IntPtr.Zero&&StartupWindows.IsWindow(target))StartupWindows.SetForegroundWindow(target);};
         window.MouseLeftButtonDown+=delegate(object s,System.Windows.Input.MouseButtonEventArgs e){if(target!=IntPtr.Zero&&e.GetPosition(window).Y<40){StartupWindows.DragApp(target);e.Handled=true;}};
         window.KeyDown+=delegate(object s,System.Windows.Input.KeyEventArgs e){if(e.Key==System.Windows.Input.Key.Escape)Finish("skipped");};
         window.Closed+=delegate{closed=true;};
@@ -72,10 +73,10 @@ public sealed class StartupLauncher {
         CompositionTarget.Rendering-=Presented;scan.Stop();animation.Stop();
         if(eventHook!=IntPtr.Zero)StartupWindows.UnhookWinEvent(eventHook);
         try {
-            File.WriteAllText(Path.Combine(root,test?"launcher-self-test.json":"last-run.json"),json.Serialize(new {Elapsed=clock.Elapsed.TotalSeconds,FirstFrameMs=firstFrame*1000,ApplicationLaunchMs=launchTime*1000,RenderCallbacks=frames,WindowRebinds=rebinds,BoundsMismatchFrames=boundsMismatches,Reason=reason,BlackFirstFrame=blackFirstFrame,NativeExecutable=true,Test=test,RendererTier=RenderCapability.Tier>>16}));
+            File.WriteAllText(Path.Combine(root,test?"launcher-self-test.json":"last-run.json"),json.Serialize(new {Elapsed=clock.Elapsed.TotalSeconds,FirstFrameMs=firstFrame*1000,ApplicationLaunchMs=launchTime*1000,RenderCallbacks=frames,WindowRebinds=rebinds,BoundsMismatchFrames=boundsMismatches,Reason=reason,BlackFirstFrame=blackFirstFrame,LayeringFailures=layeringFailures,CoveringSamples=coveringSamples,NativeExecutable=true,Test=test,RendererTier=RenderCapability.Tier>>16}));
             if(!test)File.WriteAllText(Path.Combine(root,"window-placement.json"),json.Serialize(lastBounds));
         }catch{}
-        if(test)return blackFirstFrame&&reason=="complete"&&frames>20&&rebinds>=2&&boundsMismatches==0&&firstFrame>=0&&launchTime>=firstFrame?0:2;
+        if(test)return blackFirstFrame&&reason=="complete"&&frames>20&&rebinds>=2&&boundsMismatches==0&&layeringFailures==0&&coveringSamples>3&&firstFrame>=0&&launchTime>=firstFrame?0:2;
         return 0;
     }
     void FirstPaint(object s,EventArgs e) {
@@ -110,6 +111,11 @@ public sealed class StartupLauncher {
         double elapsed=clock.Elapsed.TotalSeconds-firstFrame;
         if(test&&elapsed>1.15&&!replaced){replaced=true;CreateStub(true);}
         if(test&&elapsed>2.5&&!resized){resized=true;stub.Left=120;stub.Top=100;stub.Width=1000;stub.Height=650;}
+        if(test&&elapsed>3.05&&!testedCover) {
+            testedCover=true;covering=new Window{Title="Other application layering test",Left=180,Top=150,Width=560,Height=360,ShowInTaskbar=false,ShowActivated=true,Background=Brushes.White};covering.Show();covering.Activate();
+        }
+        if(test&&covering!=null&&elapsed>3.2&&elapsed<3.9){coveringSamples++;if(StartupWindows.IsAbove(overlay,new WindowInteropHelper(covering).Handle))layeringFailures++;}
+        if(test&&covering!=null&&elapsed>=4){covering.Close();covering=null;}
         IntPtr found=test?(stub==null?IntPtr.Zero:new WindowInteropHelper(stub).Handle):StartupWindows.FindApp();
         if(found!=IntPtr.Zero&&StartupWindows.IsWindow(found)) {
             if(found!=target){target=found;targetSince=clock.Elapsed.TotalSeconds;rebinds++;captureStarted=false;}
@@ -131,7 +137,13 @@ public sealed class StartupLauncher {
     }
     void Position(StartupWindows.RECT b) {
         if(overlay==IntPtr.Zero||b.Right<=b.Left||b.Bottom<=b.Top)return;
-        StartupWindows.SetWindowPos(overlay,new IntPtr(-1),b.Left,b.Top,b.Right-b.Left,b.Bottom-b.Top,0x0010|0x0040);
+        uint flags=0x0010|0x0040;IntPtr after=IntPtr.Zero;
+        if(target!=IntPtr.Zero&&StartupWindows.IsWindow(target)) {
+            after=StartupWindows.GetWindow(target,3);
+            if(after==overlay){after=IntPtr.Zero;flags|=0x0004;}
+            else if(after!=IntPtr.Zero&&(StartupWindows.GetLong(after,-20).ToInt64()&8)!=0)after=IntPtr.Zero;
+        } else flags|=0x0004;
+        StartupWindows.SetWindowPos(overlay,after,b.Left,b.Top,b.Right-b.Left,b.Bottom-b.Top,flags);
     }
     void Presented(object sender,EventArgs args) {
         var rendering=args as RenderingEventArgs;
@@ -143,6 +155,7 @@ public sealed class StartupLauncher {
         double elapsed=clock.Elapsed.TotalSeconds-firstFrame;
         if(target!=IntPtr.Zero&&StartupWindows.IsWindow(target)&&!StartupWindows.IsIconic(target)) {
             lastBounds=StartupWindows.ContentBounds(target);Position(lastBounds);
+            if(test&&(StartupWindows.GetLong(overlay,-20).ToInt64()&8)!=0)layeringFailures++;
             if(test){StartupWindows.RECT actual;StartupWindows.GetWindowRect(overlay,out actual);if(actual.Left!=lastBounds.Left||actual.Top!=lastBounds.Top||actual.Right!=lastBounds.Right||actual.Bottom!=lastBounds.Bottom)boundsMismatches++;}
         }
         IntPtr fg=StartupWindows.GetForegroundWindow();
@@ -159,6 +172,6 @@ public sealed class StartupLauncher {
     }
     void Finish(string why) {
         if(closed)return;reason=why;scan.Stop();animation.Stop();closed=true;
-        if(stub!=null)stub.Close();window.Close();Application.Current.Shutdown();
+        if(covering!=null)covering.Close();if(stub!=null)stub.Close();window.Close();Application.Current.Shutdown();
     }
 }
